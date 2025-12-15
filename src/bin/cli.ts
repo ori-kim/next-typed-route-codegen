@@ -40,6 +40,7 @@ Usage:
 
 Commands:
   generate    Generate route types (default)
+  watch       Watch for changes and regenerate
   init        Create a default config file
   help        Show this help message
 
@@ -50,6 +51,7 @@ Options:
 Examples:
   npx next-typed-codegen-route
   npx next-typed-codegen-route generate
+  npx next-typed-codegen-route watch
   npx next-typed-codegen-route --app-dir app --output src/generated/routes
 `);
 }
@@ -66,23 +68,23 @@ function printVersion() {
 }
 
 async function initConfig() {
-  const configContent = `import { defineConfig } from "next-typed-codegen-route";
+  const configContent = `import { createRouteConfig } from "next-typed-codegen-route";
 
-export default defineConfig({
-  // 스캔할 app 디렉토리 경로
+export default createRouteConfig({
+  // App directory path to scan
   appDir: "src/app",
 
-  // 생성된 파일들의 출력 디렉토리
+  // Output directory for generated files
   outputDir: ".generated/routes",
 
-  // 제외할 경로 패턴
-  shouldExclude: (pathSegment) => {
-    // 동적 라우팅 [id], 병렬 라우팅 @modal, 그룹 라우팅 (group)
-    return /^\\[|^@|^\\(/.test(pathSegment);
+  // Path exclusion filter
+  excludePath: (path) => {
+    // Exclude: dynamic routes [id], parallel routes @modal, route groups (group)
+    return /\\[@|\\(/.test(path);
   },
 
-  // 자식 정렬 (href 기준 알파벳순)
-  sortChildren: (a, b) => a.href.localeCompare(b.href),
+  // Route sorting (alphabetical by routePath)
+  sortRoutes: (a, b) => a.routePath.localeCompare(b.routePath),
 });
 `;
 
@@ -95,6 +97,39 @@ export default defineConfig({
 
   fs.writeFileSync(configPath, configContent);
   console.log("✅ Created config file: route-codegen.config.ts");
+}
+
+async function watch(config: RouteCodegenConfig) {
+  const appDir = config.appDir || "src/app";
+
+  // Initial generation
+  await generate(config);
+
+  console.log(`👀 Watching for changes in ${appDir}...`);
+  console.log("   Press Ctrl+C to stop\n");
+
+  let timeout: NodeJS.Timeout | null = null;
+  let isGenerating = false;
+
+  fs.watch(appDir, { recursive: true }, (eventType, filename) => {
+    // Only watch .ts and .tsx files
+    if (!filename?.endsWith(".tsx") && !filename?.endsWith(".ts")) return;
+
+    // Debounce to avoid multiple rapid regenerations
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(async () => {
+      if (isGenerating) return;
+      isGenerating = true;
+
+      console.log(`🔄 Change detected: ${filename}`);
+      try {
+        await generate(config);
+      } catch (error) {
+        console.error("❌ Generation failed:", (error as Error).message);
+      }
+      isGenerating = false;
+    }, 100);
+  });
 }
 
 async function main() {
@@ -118,7 +153,7 @@ async function main() {
     return;
   }
 
-  if (command === "generate" || !args[0]) {
+  if (command === "generate" || command === "watch" || !args[0]) {
     // CLI option parsing
     const appDirIndex = args.indexOf("--app-dir");
     const outputIndex = args.indexOf("--output");
@@ -136,6 +171,11 @@ async function main() {
     // Load config file and merge with CLI options
     const fileConfig = await loadConfig();
     const config = { ...fileConfig, ...cliOptions };
+
+    if (command === "watch") {
+      await watch(config);
+      return;
+    }
 
     console.log("🔍 Scanning routes...");
     await generate(config);

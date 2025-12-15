@@ -1,11 +1,8 @@
 import type {
   DynamicRouteOptions,
   DynamicRouteOptionsWithValidator,
-  DynamicRouteValidator,
-  RouteMeta,
   StaticRouteOptions,
   StaticRouteOptionsWithValidator,
-  StaticRouteValidator,
   StringifyValues,
 } from "../types/route-meta";
 

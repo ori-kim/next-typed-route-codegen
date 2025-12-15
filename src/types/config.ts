@@ -34,7 +34,7 @@ export interface RouteCodegenConfig {
 
   /**
    * Output directory for generated files
-   * Default: ".generated/routes"
+   * Default: ".generated/next-typed-codegen-route"
    *
    * @example
    * outputDir: "src/generated/routes"

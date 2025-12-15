@@ -55,7 +55,7 @@ export interface RouteCodegenConfig {
 
   /**
    * Output directory for generated files
-   * Default: ".generated/routes"
+   * Default: ".generated/next-typed-codegen-route"
    *
    * @example
    * outputDir: "src/generated/routes"
@@ -67,6 +67,13 @@ export interface RouteCodegenConfig {
    * Default: "src/app"
    */
   appDir?: string;
+}
+
+/**
+ * Route codegen config helper
+ */
+export function createRouteConfig(config: RouteCodegenConfig): RouteCodegenConfig {
+  return config;
 }
 
 /**
@@ -199,11 +206,8 @@ export function createRouteTemplate(): string {
 import type {
   DynamicRouteOptions,
   DynamicRouteOptionsWithValidator,
-  DynamicRouteValidator,
-  RouteMeta,
   StaticRouteOptions,
   StaticRouteOptionsWithValidator,
-  StaticRouteValidator,
   StringifyValues,
 } from "./route-meta";
 
@@ -588,6 +592,7 @@ export type {
 } from "./utils";
 
 // Functions
+export { createRouteConfig } from "./route-meta";
 export { createRoute, createDynamicRoute } from "./create-route";
 
 export {

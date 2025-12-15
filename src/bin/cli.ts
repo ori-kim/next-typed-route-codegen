@@ -77,7 +77,7 @@ function printVersion() {
 
 async function initConfig() {
   const cwd = process.cwd();
-  const outputDir = ".generated/routes";
+  const outputDir = ".generated/next-typed-codegen-route";
   const outputPath = path.join(cwd, outputDir);
 
   // Create output directory
@@ -104,9 +104,9 @@ async function initConfig() {
   }
 
   // Create config file
-  const configContent = `import type { RouteCodegenConfig } from "./${outputDir}";
+  const configContent = `import { createRouteConfig } from "./${outputDir}";
 
-const config: RouteCodegenConfig = {
+export default createRouteConfig({
   // App directory path to scan
   appDir: "src/app",
 
@@ -121,9 +121,7 @@ const config: RouteCodegenConfig = {
 
   // Route sorting (alphabetical by routePath)
   sortRoutes: (a, b) => a.routePath.localeCompare(b.routePath),
-};
-
-export default config;
+});
 `;
 
   const configPath = path.join(cwd, "route-codegen.config.ts");
@@ -137,8 +135,8 @@ export default config;
 
   console.log("\n📋 Next steps:");
   console.log("   1. Run `npx next-typed-codegen-route generate` to generate route types");
-  console.log("   2. Import from '.generated/routes' in your pages:");
-  console.log("      import { createRoute, createDynamicRoute } from '.generated/routes';");
+  console.log(`   2. Import from '${outputDir}' in your pages:`);
+  console.log(`      import { createRoute, createDynamicRoute } from '${outputDir}';`);
 }
 
 async function watch(config: RouteCodegenConfig) {

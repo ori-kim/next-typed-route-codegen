@@ -12,7 +12,7 @@ import { typesTemplate, routesTemplate } from "./templates";
 export async function generate(config: RouteCodegenConfig = {}): Promise<void> {
   const {
     appDir = "src/app",
-    outputDir = ".generated/routes",
+    outputDir = ".generated/next-typed-codegen-route",
     excludePath,
     sortRoutes,
   } = config;

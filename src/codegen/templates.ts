@@ -37,19 +37,81 @@ ${paramsMap || "  // No dynamic routes"}
 `;
 }
 
+interface RouteInput {
+  routePath: string;
+  importPath: string;
+  params: string[];
+  isStatic: boolean;
+}
+
 /**
  * Template for utils.ts
  */
-export function utilsTemplate(params: { dynamicPatterns: string }): string {
-  const { dynamicPatterns } = params;
+export function utilsTemplate(params: {
+  dynamicPatterns: string;
+  staticRoutes: RouteInput[];
+  dynamicRoutes: RouteInput[];
+}): string {
+  const { dynamicPatterns, staticRoutes, dynamicRoutes } = params;
+
+  const allRoutes = [...staticRoutes, ...dynamicRoutes];
+  const routesArrayLiteral = allRoutes.length > 0
+    ? allRoutes.map((r) => `  "${r.routePath}" as const`).join(",\n")
+    : "";
+
+  // Generate routeConfigs with dynamic import
+  const routeConfigsLiteral = allRoutes
+    .map((r) => `  "${r.routePath}": () => import("${r.importPath}").then(m => m.default?._routeConfig)`)
+    .join(",\n");
+
+  // Generate static route info (params, isStatic)
+  const routeInfoLiteral = allRoutes
+    .map((r) => {
+      const paramsStr = JSON.stringify(r.params);
+      return `  "${r.routePath}": {
+    href: "${r.routePath}" as const,
+    isStatic: ${r.isStatic},
+    params: ${paramsStr} as ${r.isStatic ? "[]" : `(keyof RouteParamsMap["${r.routePath}"])[]`},
+  }`;
+    })
+    .join(",\n");
 
   return `${getHeaderComment()}
+import type { RouteConfig } from "next-typed-codegen-route";
 import type {
   RouteHref,
   StaticRouteHref,
   DynamicRouteHref,
   RouteParamsMap,
 } from "./types";
+
+/** All available routes */
+export const ROUTES = [
+${routesArrayLiteral}
+] as const satisfies readonly RouteHref[];
+
+/** Route info (static data) */
+export type RouteInfo<T extends RouteHref> = T extends DynamicRouteHref
+  ? {
+      href: T;
+      isStatic: false;
+      params: (keyof RouteParamsMap[T])[];
+    }
+  : {
+      href: T;
+      isStatic: true;
+      params: [];
+    };
+
+/** Static route info map */
+export const ROUTE_INFO: { [K in RouteHref]: RouteInfo<K> } = {
+${routeInfoLiteral}
+};
+
+/** Dynamic import getters for route configs (meta, validator, etc.) */
+export const ROUTE_CONFIGS: { [K in RouteHref]: () => Promise<RouteConfig | undefined> } = {
+${routeConfigsLiteral}
+};
 
 /** Dynamic route patterns for runtime matching */
 export const DYNAMIC_ROUTE_PATTERNS: Array<{
@@ -139,6 +201,161 @@ export function extractParams(
 
   return result;
 }
+
+/** Route info with config included */
+export type FullRouteInfo<T extends RouteHref> = RouteInfo<T> & {
+  config: RouteConfig | undefined;
+};
+
+/** Route options */
+export interface RouteOptions {
+  /** Load config dynamically (default: true) */
+  dynamic?: boolean;
+}
+
+/**
+ * Get all available routes
+ *
+ * @example
+ * // With config (default, async)
+ * await getAllRoutes()
+ * // => [{ href: "/", isStatic: true, params: [], config: {...} }, ...]
+ *
+ * // Without config (sync)
+ * getAllRoutes({ dynamic: false })
+ * // => [{ href: "/", isStatic: true, params: [] }, ...]
+ */
+export function getAllRoutes(options?: { dynamic?: true }): Promise<FullRouteInfo<RouteHref>[]>;
+export function getAllRoutes(options: { dynamic: false }): RouteInfo<RouteHref>[];
+export function getAllRoutes(options: RouteOptions = {}): Promise<FullRouteInfo<RouteHref>[]> | RouteInfo<RouteHref>[] {
+  const { dynamic = true } = options;
+
+  if (!dynamic) {
+    return ROUTES.map((href) => ROUTE_INFO[href] as RouteInfo<RouteHref>);
+  }
+
+  return Promise.all(
+    ROUTES.map(async (href) => ({
+      ...ROUTE_INFO[href],
+      config: await ROUTE_CONFIGS[href](),
+    } as FullRouteInfo<RouteHref>))
+  );
+}
+
+/**
+ * Get route by typed href
+ *
+ * @example
+ * // With config (default, async)
+ * await getRoute("/user/[id]")
+ * // => { href: "/user/[id]", isStatic: false, params: ["id"], config: {...} }
+ *
+ * // Without config (sync)
+ * getRoute("/user/[id]", { dynamic: false })
+ * // => { href: "/user/[id]", isStatic: false, params: ["id"] }
+ */
+export function getRoute<T extends RouteHref>(href: T, options?: { dynamic?: true }): Promise<FullRouteInfo<T>>;
+export function getRoute<T extends RouteHref>(href: T, options: { dynamic: false }): RouteInfo<T>;
+export function getRoute<T extends RouteHref>(href: T, options: RouteOptions = {}): Promise<FullRouteInfo<T>> | RouteInfo<T> {
+  const { dynamic = true } = options;
+
+  if (!dynamic) {
+    return ROUTE_INFO[href] as RouteInfo<T>;
+  }
+
+  return ROUTE_CONFIGS[href]().then((config) => ({
+    ...ROUTE_INFO[href],
+    config,
+  } as FullRouteInfo<T>));
+}
+
+/** Route info from pathname matching (with extracted param values) */
+export type PathnameRouteInfo<T extends RouteHref> = T extends DynamicRouteHref
+  ? {
+      href: T;
+      isStatic: false;
+      params: RouteParamsMap[T];
+    }
+  : {
+      href: T;
+      isStatic: true;
+      params: Record<string, never>;
+    };
+
+/** Route info from pathname matching with config */
+export type FullPathnameRouteInfo<T extends RouteHref> = PathnameRouteInfo<T> & {
+  config: RouteConfig | undefined;
+};
+
+/**
+ * Get route by actual pathname
+ *
+ * @example
+ * // With config (default, async)
+ * await getRouteByPathname("/user/123")
+ * // => { href: "/user/[id]", isStatic: false, params: { id: "123" }, config: {...} }
+ *
+ * // Without config (sync)
+ * getRouteByPathname("/user/123", { dynamic: false })
+ * // => { href: "/user/[id]", isStatic: false, params: { id: "123" } }
+ */
+export function getRouteByPathname(pathname: string, options?: { dynamic?: true }): Promise<FullPathnameRouteInfo<RouteHref> | null>;
+export function getRouteByPathname(pathname: string, options: { dynamic: false }): PathnameRouteInfo<RouteHref> | null;
+export function getRouteByPathname(
+  pathname: string,
+  options: RouteOptions = {}
+): Promise<FullPathnameRouteInfo<RouteHref> | null> | PathnameRouteInfo<RouteHref> | null {
+  const { dynamic = true } = options;
+
+  // Check static routes first (exact match)
+  if (ROUTES.includes(pathname as RouteHref)) {
+    const isDynamicRoute = pathname.includes("[");
+    if (!isDynamicRoute) {
+      const info: PathnameRouteInfo<StaticRouteHref> = {
+        href: pathname as StaticRouteHref,
+        isStatic: true,
+        params: {},
+      };
+
+      if (!dynamic) return info;
+
+      return ROUTE_CONFIGS[pathname as StaticRouteHref]().then((config) => ({
+        ...info,
+        config,
+      }));
+    }
+  }
+
+  // Check dynamic routes
+  for (const { pattern, href } of DYNAMIC_ROUTE_PATTERNS) {
+    const match = pathname.match(pattern);
+    if (match) {
+      const paramKeys = href.match(/\\[([^\\]]+)\\]/g);
+      if (!paramKeys) continue;
+
+      const params: Record<string, string> = {};
+      paramKeys.forEach((key, index) => {
+        const paramName = key.slice(1, -1);
+        params[paramName] = decodeURIComponent(match[index + 1]);
+      });
+
+      const info = {
+        href,
+        isStatic: false,
+        params,
+      } as PathnameRouteInfo<RouteHref>;
+
+      if (!dynamic) return info;
+
+      return ROUTE_CONFIGS[href]().then((config) => ({
+        ...info,
+        config,
+      }));
+    }
+  }
+
+  return dynamic ? Promise.resolve(null) : null;
+}
 `;
 }
 
@@ -154,10 +371,24 @@ export type {
   RouteParamsMap,
 } from "./types";
 
+export type {
+  RouteInfo,
+  FullRouteInfo,
+  PathnameRouteInfo,
+  FullPathnameRouteInfo,
+  RouteOptions,
+} from "./utils";
+
 export {
   path,
   matchDynamicRoute,
   extractParams,
+  getAllRoutes,
+  getRoute,
+  getRouteByPathname,
+  ROUTES,
+  ROUTE_INFO,
+  ROUTE_CONFIGS,
   DYNAMIC_ROUTE_PATTERNS,
 } from "./utils";
 `;

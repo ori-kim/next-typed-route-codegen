@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { RouteCodegenConfig } from "../types/config";
+import type { RouteCodegenConfig, ScannedRoute } from "../types/config";
 import { scanRoutes, routePathToRegexString } from "./scanner";
 import { typesTemplate, utilsTemplate, indexTemplate } from "./templates";
 
@@ -32,7 +32,7 @@ export async function generate(config: RouteCodegenConfig = {}): Promise<void> {
 
   // 5. Generate files
   const typesContent = generateTypesFile(staticRoutes, dynamicRoutes);
-  const utilsContent = generateUtilsFile(dynamicRoutes);
+  const utilsContent = generateUtilsFile(staticRoutes, dynamicRoutes, appDir);
   const indexContent = indexTemplate();
 
   fs.writeFileSync(path.join(outputDir, "types.ts"), typesContent);
@@ -70,7 +70,9 @@ function generateTypesFile(
  * Generate utils.ts content
  */
 function generateUtilsFile(
-  dynamicRoutes: { routePath: string; params: string[] }[]
+  staticRoutes: ScannedRoute[],
+  dynamicRoutes: ScannedRoute[],
+  appDir: string
 ): string {
   const dynamicPatterns = dynamicRoutes
     .map((r) => {
@@ -79,5 +81,31 @@ function generateUtilsFile(
     })
     .join(",\n");
 
-  return utilsTemplate({ dynamicPatterns });
+  // Convert filePath to import path (e.g., src/app/user/[id]/page.tsx -> @/app/user/[id]/page)
+  const toImportPath = (filePath: string): string => {
+    // Remove file extension
+    const withoutExt = filePath.replace(/\.(tsx?|jsx?)$/, "");
+    // Convert to @/ alias (assuming src/app -> @/app)
+    if (withoutExt.startsWith("src/")) {
+      return "@/" + withoutExt.slice(4);
+    }
+    // Fallback: use relative path with @/
+    return "@/" + withoutExt;
+  };
+
+  return utilsTemplate({
+    dynamicPatterns,
+    staticRoutes: staticRoutes.map((r) => ({
+      routePath: r.routePath,
+      importPath: toImportPath(r.filePath),
+      params: r.params,
+      isStatic: r.isStatic,
+    })),
+    dynamicRoutes: dynamicRoutes.map((r) => ({
+      routePath: r.routePath,
+      importPath: toImportPath(r.filePath),
+      params: r.params,
+      isStatic: r.isStatic,
+    })),
+  });
 }

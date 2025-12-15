@@ -10,11 +10,19 @@ import type {
 } from "../types/route-meta";
 
 /**
- * Route component type with attached metadata
+ * Route config type (the options passed to createRoute/createDynamicRoute)
+ */
+export type RouteConfig =
+  | StaticRouteOptions
+  | StaticRouteOptionsWithValidator<unknown>
+  | DynamicRouteOptions<unknown>
+  | DynamicRouteOptionsWithValidator<unknown, unknown>;
+
+/**
+ * Route component type with attached config
  */
 export type RouteComponent<P = object> = React.ComponentType<P> & {
-  _routeMeta?: RouteMeta;
-  _routeValidator?: StaticRouteValidator<unknown> | DynamicRouteValidator<unknown, unknown>;
+  _routeConfig?: RouteConfig;
 };
 
 // ============================================
@@ -41,12 +49,7 @@ export function createRoute(
   // biome-ignore lint/suspicious/noExplicitAny: Overload implementation signature
 ): RouteComponent<any> {
   const RouteComponent = options.component as RouteComponent;
-
-  RouteComponent._routeMeta = options.meta;
-  if (options.validator) {
-    RouteComponent._routeValidator = options.validator;
-  }
-
+  RouteComponent._routeConfig = options;
   return RouteComponent;
 }
 
@@ -79,11 +82,6 @@ export function createDynamicRoute(
   // biome-ignore lint/suspicious/noExplicitAny: Overload implementation signature
 ): RouteComponent<any> {
   const RouteComponent = options.component as RouteComponent;
-
-  RouteComponent._routeMeta = options.meta;
-  if (options.validator) {
-    RouteComponent._routeValidator = options.validator;
-  }
-
+  RouteComponent._routeConfig = options;
   return RouteComponent;
 }

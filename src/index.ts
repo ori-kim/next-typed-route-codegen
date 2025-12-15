@@ -32,4 +32,4 @@ export {
   matchRoute,
 } from "./runtime";
 
-export type { RouteComponent } from "./runtime";
+export type { RouteComponent, RouteConfig } from "./runtime";

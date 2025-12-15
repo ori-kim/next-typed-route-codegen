@@ -1,0 +1,77 @@
+{
+  "name": "next-typed-codegen-route",
+  "version": "0.1.0",
+  "description": "Type-safe route codegen for Next.js App Router - Generate typed routes, path builders, and layout metadata from your app directory",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js"
+    },
+    "./codegen": {
+      "types": "./dist/codegen/index.d.ts",
+      "import": "./dist/codegen/index.js"
+    }
+  },
+  "bin": {
+    "next-typed-codegen-route": "./dist/bin/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "keywords": [
+    "next.js",
+    "nextjs",
+    "typescript",
+    "codegen",
+    "routes",
+    "app-router",
+    "type-safe",
+    "routing",
+    "layout",
+    "sidebar",
+    "navigation",
+    "tanstack-router"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/next-typed-codegen-route"
+  },
+  "homepage": "https://github.com/your-username/next-typed-codegen-route#readme",
+  "bugs": {
+    "url": "https://github.com/your-username/next-typed-codegen-route/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "next": ">=13"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "tsup": "^8.3.5",
+    "typescript": "^5"
+  }
+}

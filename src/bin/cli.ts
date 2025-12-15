@@ -3,6 +3,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createJiti } from "jiti";
 import { generate } from "../codegen/generator";
 import {
   routeMetaTemplate,
@@ -13,6 +14,8 @@ import {
   routesInitTemplate,
 } from "../codegen/templates";
 import type { RouteCodegenConfig } from "../types/config";
+
+const jiti = createJiti(import.meta.url);
 
 const CONFIG_FILE_NAMES = [
   "route-codegen.config.ts",
@@ -27,8 +30,8 @@ async function loadConfig(): Promise<RouteCodegenConfig> {
     const configPath = path.join(cwd, configFile);
     if (fs.existsSync(configPath)) {
       try {
-        const module = await import(configPath);
-        return module.default || module.codegenConfig || module;
+        const module = await jiti.import(configPath, { default: true });
+        return (module as RouteCodegenConfig) || {};
       } catch (error) {
         console.warn(`⚠️ Failed to load ${configFile}:`, error);
       }

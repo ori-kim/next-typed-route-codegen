@@ -32,9 +32,6 @@ export function scanRoutes(
 
         walk(entryPath, [...segments, entry.name]);
       } else if (entry.name === "page.tsx" || entry.name === "page.ts") {
-        // Check if file uses createRoute or createDynamicRoute
-        if (!usesRouteCreator(entryPath)) continue;
-
         const routePath = "/" + segments.join("/");
 
         // Extract dynamic params from path
@@ -53,14 +50,6 @@ export function scanRoutes(
 
   walk(appDir);
   return routes;
-}
-
-/**
- * Check if file uses createRoute or createDynamicRoute
- */
-function usesRouteCreator(filePath: string): boolean {
-  const content = fs.readFileSync(filePath, "utf-8");
-  return /\b(createRoute|createDynamicRoute)\s*\(/.test(content);
 }
 
 /**

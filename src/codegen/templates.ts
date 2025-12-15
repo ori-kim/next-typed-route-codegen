@@ -713,7 +713,7 @@ export function routesTemplate(params: {
     : "";
 
   const routeConfigsLiteral = allRoutes
-    .map((r) => `  "${r.routePath}": () => import("${r.importPath}").then(m => m.default?._routeConfig)`)
+    .map((r) => `  "${r.routePath}": () => import("${r.importPath}").then(m => (m.default as RouteComponent | undefined)?._routeConfig)`)
     .join(",\n");
 
   const routeInfoLiteral = allRoutes
@@ -734,7 +734,7 @@ export function routesTemplate(params: {
     : `import type { RouteHref } from "./types";`;
 
   return `${getHeaderComment()}
-import type { RouteConfig } from "./create-route";
+import type { RouteConfig, RouteComponent } from "./create-route";
 ${typesImport}
 import type { RouteInfo } from "./utils";
 

@@ -1,6 +1,6 @@
 {
   "name": "next-typed-codegen-route",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Type-safe route codegen for Next.js App Router - Generate typed routes, path builders, and layout metadata from your app directory",
   "type": "module",
   "main": "./dist/index.js",

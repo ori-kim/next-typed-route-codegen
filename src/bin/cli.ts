@@ -4,6 +4,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { generate } from "../codegen/generator";
+import {
+  routeMetaTemplate,
+  createRouteTemplate,
+  utilsStaticTemplate,
+  indexInitTemplate,
+  typesInitTemplate,
+  routesInitTemplate,
+} from "../codegen/templates";
 import type { RouteCodegenConfig } from "../types/config";
 
 const CONFIG_FILE_NAMES = [
@@ -68,35 +76,69 @@ function printVersion() {
 }
 
 async function initConfig() {
-  const configContent = `import { createRouteConfig } from "next-typed-codegen-route";
+  const cwd = process.cwd();
+  const outputDir = ".generated/routes";
+  const outputPath = path.join(cwd, outputDir);
 
-export default createRouteConfig({
+  // Create output directory
+  fs.mkdirSync(outputPath, { recursive: true });
+
+  // Generate static files
+  const files = [
+    { name: "route-meta.ts", content: routeMetaTemplate() },
+    { name: "create-route.ts", content: createRouteTemplate() },
+    { name: "types.ts", content: typesInitTemplate() },
+    { name: "routes.ts", content: routesInitTemplate() },
+    { name: "utils.ts", content: utilsStaticTemplate() },
+    { name: "index.ts", content: indexInitTemplate() },
+  ];
+
+  for (const file of files) {
+    fs.writeFileSync(path.join(outputPath, file.name), file.content);
+  }
+
+  console.log(`✅ Initialized route files in ${outputDir}`);
+  console.log("   Generated files:");
+  for (const file of files) {
+    console.log(`   - ${file.name}`);
+  }
+
+  // Create config file
+  const configContent = `import type { RouteCodegenConfig } from "./${outputDir}";
+
+const config: RouteCodegenConfig = {
   // App directory path to scan
   appDir: "src/app",
 
   // Output directory for generated files
-  outputDir: ".generated/routes",
+  outputDir: "${outputDir}",
 
   // Path exclusion filter
   excludePath: (path) => {
-    // Exclude: dynamic routes [id], parallel routes @modal, route groups (group)
-    return /\\[@|\\(/.test(path);
+    // Exclude: parallel routes @modal, route groups (group)
+    return /[@(]/.test(path);
   },
 
   // Route sorting (alphabetical by routePath)
   sortRoutes: (a, b) => a.routePath.localeCompare(b.routePath),
-});
+};
+
+export default config;
 `;
 
-  const configPath = path.join(process.cwd(), "route-codegen.config.ts");
+  const configPath = path.join(cwd, "route-codegen.config.ts");
 
   if (fs.existsSync(configPath)) {
-    console.log("⚠️ Config file already exists: route-codegen.config.ts");
-    return;
+    console.log("\n⚠️ Config file already exists: route-codegen.config.ts");
+  } else {
+    fs.writeFileSync(configPath, configContent);
+    console.log("\n✅ Created config file: route-codegen.config.ts");
   }
 
-  fs.writeFileSync(configPath, configContent);
-  console.log("✅ Created config file: route-codegen.config.ts");
+  console.log("\n📋 Next steps:");
+  console.log("   1. Run `npx next-typed-codegen-route generate` to generate route types");
+  console.log("   2. Import from '.generated/routes' in your pages:");
+  console.log("      import { createRoute, createDynamicRoute } from '.generated/routes';");
 }
 
 async function watch(config: RouteCodegenConfig) {

@@ -8,87 +8,300 @@ export function getHeaderComment(): string {
 `;
 }
 
+// ============================================
+// Init Templates (Static files - generated once)
+// ============================================
+
 /**
- * Template for types.ts
+ * Template for route-meta.ts (init)
  */
-export function typesTemplate(params: {
-  staticHrefUnion: string;
-  dynamicHrefUnion: string;
-  paramsMap: string;
-}): string {
-  const { staticHrefUnion, dynamicHrefUnion, paramsMap } = params;
-
+export function routeMetaTemplate(): string {
   return `${getHeaderComment()}
-/** Static routes (no params required) */
-export type StaticRouteHref =
-${staticHrefUnion || "  | never"};
+import type { JSX } from "react";
 
-/** Dynamic routes (params required) */
-export type DynamicRouteHref =
-${dynamicHrefUnion || "  | never"};
-
-/** All route hrefs */
-export type RouteHref = StaticRouteHref | DynamicRouteHref;
-
-/** Params type map for dynamic routes */
-export interface RouteParamsMap {
-${paramsMap || "  // No dynamic routes"}
-}
-`;
-}
-
-interface RouteInput {
+/**
+ * Scanned route information (used by codegen)
+ */
+export interface ScannedRoute {
+  /** Absolute file path */
+  filePath: string;
+  /** Route path (e.g., /test/[id]) */
   routePath: string;
-  importPath: string;
+  /** Dynamic parameter names (e.g., ["id"]) */
   params: string[];
+  /** Whether this is a static route */
   isStatic: boolean;
 }
 
 /**
- * Template for utils.ts
+ * Codegen configuration
  */
-export function utilsTemplate(params: {
-  dynamicPatterns: string;
-  staticRoutes: RouteInput[];
-  dynamicRoutes: RouteInput[];
-}): string {
-  const { dynamicPatterns, staticRoutes, dynamicRoutes } = params;
+export interface RouteCodegenConfig {
+  /**
+   * Path exclusion filter
+   * Returns true to exclude the path from scanning
+   *
+   * @example
+   * excludePath: (path) => path.includes("/@")
+   */
+  excludePath?: (path: string) => boolean;
 
-  const allRoutes = [...staticRoutes, ...dynamicRoutes];
-  const routesArrayLiteral = allRoutes.length > 0
-    ? allRoutes.map((r) => `  "${r.routePath}" as const`).join(",\n")
-    : "";
+  /**
+   * Route sorting function
+   * @example
+   * sortRoutes: (a, b) => a.routePath.localeCompare(b.routePath)
+   */
+  sortRoutes?: (a: ScannedRoute, b: ScannedRoute) => number;
 
-  // Generate routeConfigs with dynamic import
-  const routeConfigsLiteral = allRoutes
-    .map((r) => `  "${r.routePath}": () => import("${r.importPath}").then(m => m.default?._routeConfig)`)
-    .join(",\n");
+  /**
+   * Output directory for generated files
+   * Default: ".generated/routes"
+   *
+   * @example
+   * outputDir: "src/generated/routes"
+   */
+  outputDir?: string;
 
-  // Generate static route info (params, isStatic)
-  const routeInfoLiteral = allRoutes
-    .map((r) => {
-      const paramsStr = JSON.stringify(r.params);
-      return `  "${r.routePath}": {
-    href: "${r.routePath}" as const,
-    isStatic: ${r.isStatic},
-    params: ${paramsStr} as ${r.isStatic ? "[]" : `(keyof RouteParamsMap["${r.routePath}"])[]`},
-  }`;
-    })
-    .join(",\n");
+  /**
+   * App directory path to scan
+   * Default: "src/app"
+   */
+  appDir?: string;
+}
 
+/**
+ * Route metadata
+ * Extend this interface to add custom metadata to your routes
+ *
+ * @example
+ * // In a .d.ts file or at the top of your route file:
+ * declare module "./.generated/routes" {
+ *   interface RouteMeta {
+ *     title?: string;
+ *     description?: string;
+ *   }
+ * }
+ */
+// biome-ignore lint/suspicious/noEmptyInterface: Extensible via declare module
+export interface RouteMeta {}
+
+/**
+ * Convert all object values to string
+ */
+export type StringifyValues<T> = {
+  [K in keyof T]: string;
+};
+
+/**
+ * SearchParams validator type
+ */
+export type SearchParamsValidator<TSearchParams> = (
+  searchParams: Record<string, string | string[] | undefined>,
+) => Promise<TSearchParams> | TSearchParams;
+
+/**
+ * Params validator type
+ */
+export type ParamsValidator<TParams> = (
+  params: Record<string, string>,
+) => Promise<TParams> | TParams;
+
+/**
+ * Static route validator (searchParams only)
+ */
+export interface StaticRouteValidator<TSearchParams> {
+  searchParams: SearchParamsValidator<TSearchParams>;
+}
+
+/**
+ * Dynamic route validator (params required, searchParams optional)
+ */
+export interface DynamicRouteValidator<TParams, TSearchParams = never> {
+  params: ParamsValidator<TParams>;
+  searchParams?: TSearchParams extends never
+    ? never
+    : SearchParamsValidator<TSearchParams>;
+}
+
+/**
+ * Server component type (async)
+ */
+export type ServerComponent<TProps> = (props: TProps) => Promise<JSX.Element>;
+
+/**
+ * Client component type
+ */
+export type ClientComponent<TProps> = (props: TProps) => JSX.Element;
+
+// ============================================
+// Static Route Options
+// ============================================
+
+/**
+ * Static route with validator
+ */
+export interface StaticRouteOptionsWithValidator<TSearchParams> {
+  component:
+    | ServerComponent<{ searchParams: Promise<TSearchParams> }>
+    | ClientComponent<{ searchParams: Promise<TSearchParams> }>;
+  validator: StaticRouteValidator<TSearchParams>;
+  meta?: RouteMeta;
+}
+
+/**
+ * Static route without validator
+ */
+export interface StaticRouteOptions {
+  component: ServerComponent<object> | ClientComponent<object>;
+  validator?: never;
+  meta?: RouteMeta;
+}
+
+// ============================================
+// Dynamic Route Options
+// ============================================
+
+/**
+ * Dynamic route with validator
+ */
+export interface DynamicRouteOptionsWithValidator<TParams, TSearchParams = never> {
+  component:
+    | ServerComponent<{
+        params: Promise<TParams>;
+        searchParams?: TSearchParams extends never ? never : Promise<TSearchParams>;
+      }>
+    | ClientComponent<{
+        params: Promise<TParams>;
+        searchParams?: TSearchParams extends never ? never : Promise<TSearchParams>;
+      }>;
+  validator: DynamicRouteValidator<TParams, TSearchParams>;
+  meta?: RouteMeta;
+}
+
+/**
+ * Dynamic route without validator
+ */
+export interface DynamicRouteOptions<TParams> {
+  component:
+    | ServerComponent<{ params: Promise<StringifyValues<TParams>> }>
+    | ClientComponent<{ params: Promise<StringifyValues<TParams>> }>;
+  validator?: never;
+  meta?: RouteMeta;
+}
+`;
+}
+
+/**
+ * Template for create-route.ts (init)
+ */
+export function createRouteTemplate(): string {
   return `${getHeaderComment()}
-import type { RouteConfig } from "next-typed-codegen-route";
+import type {
+  DynamicRouteOptions,
+  DynamicRouteOptionsWithValidator,
+  DynamicRouteValidator,
+  RouteMeta,
+  StaticRouteOptions,
+  StaticRouteOptionsWithValidator,
+  StaticRouteValidator,
+  StringifyValues,
+} from "./route-meta";
+
+/**
+ * Route config type (the options passed to createRoute/createDynamicRoute)
+ */
+export type RouteConfig =
+  | StaticRouteOptions
+  | StaticRouteOptionsWithValidator<unknown>
+  | DynamicRouteOptions<unknown>
+  | DynamicRouteOptionsWithValidator<unknown, unknown>;
+
+/**
+ * Route component type with attached config
+ */
+export type RouteComponent<P = object> = React.ComponentType<P> & {
+  _routeConfig?: RouteConfig;
+};
+
+// ============================================
+// createRoute - Static Routes
+// ============================================
+
+/**
+ * Static route with validator
+ */
+export function createRoute<TSearchParams>(
+  options: StaticRouteOptionsWithValidator<TSearchParams>,
+): RouteComponent<{ searchParams: Promise<TSearchParams> }>;
+
+/**
+ * Static route without validator
+ */
+export function createRoute(options: StaticRouteOptions): RouteComponent;
+
+/**
+ * Create static route
+ */
+export function createRoute(
+  options: StaticRouteOptionsWithValidator<unknown> | StaticRouteOptions,
+  // biome-ignore lint/suspicious/noExplicitAny: Overload implementation signature
+): RouteComponent<any> {
+  const RouteComponent = options.component as RouteComponent;
+  RouteComponent._routeConfig = options;
+  return RouteComponent;
+}
+
+// ============================================
+// createDynamicRoute - Dynamic Routes
+// ============================================
+
+/**
+ * Dynamic route with validator
+ */
+export function createDynamicRoute<TParams, TSearchParams = never>(
+  options: DynamicRouteOptionsWithValidator<TParams, TSearchParams>,
+): RouteComponent<{
+  params: Promise<TParams>;
+  searchParams?: TSearchParams extends never ? never : Promise<TSearchParams>;
+}>;
+
+/**
+ * Dynamic route without validator
+ */
+export function createDynamicRoute<TParams>(
+  options: DynamicRouteOptions<TParams>,
+): RouteComponent<{ params: Promise<StringifyValues<TParams>> }>;
+
+/**
+ * Create dynamic route
+ */
+export function createDynamicRoute(
+  options: DynamicRouteOptionsWithValidator<unknown, unknown> | DynamicRouteOptions<unknown>,
+  // biome-ignore lint/suspicious/noExplicitAny: Overload implementation signature
+): RouteComponent<any> {
+  const RouteComponent = options.component as RouteComponent;
+  RouteComponent._routeConfig = options;
+  return RouteComponent;
+}
+`;
+}
+
+/**
+ * Template for utils.ts (init) - static utilities
+ */
+export function utilsStaticTemplate(): string {
+  return `${getHeaderComment()}
+import type { RouteConfig } from "./create-route";
 import type {
   RouteHref,
   StaticRouteHref,
   DynamicRouteHref,
   RouteParamsMap,
 } from "./types";
+import { ROUTES, ROUTE_INFO, ROUTE_CONFIGS, DYNAMIC_ROUTE_PATTERNS } from "./routes";
 
-/** All available routes */
-export const ROUTES = [
-${routesArrayLiteral}
-] as const satisfies readonly RouteHref[];
+// Re-export from routes.ts
+export { ROUTES, ROUTE_INFO, ROUTE_CONFIGS, DYNAMIC_ROUTE_PATTERNS };
 
 /** Route info (static data) */
 export type RouteInfo<T extends RouteHref> = T extends DynamicRouteHref
@@ -103,38 +316,46 @@ export type RouteInfo<T extends RouteHref> = T extends DynamicRouteHref
       params: [];
     };
 
-/** Static route info map */
-export const ROUTE_INFO: { [K in RouteHref]: RouteInfo<K> } = {
-${routeInfoLiteral}
+/** Route info with config included */
+export type FullRouteInfo<T extends RouteHref> = RouteInfo<T> & {
+  config: RouteConfig | undefined;
 };
 
-/** Dynamic import getters for route configs (meta, validator, etc.) */
-export const ROUTE_CONFIGS: { [K in RouteHref]: () => Promise<RouteConfig | undefined> } = {
-${routeConfigsLiteral}
-};
+/** Route options */
+export interface RouteOptions {
+  /** Load config dynamically (default: true) */
+  dynamic?: boolean;
+}
 
-/** Dynamic route patterns for runtime matching */
-export const DYNAMIC_ROUTE_PATTERNS: Array<{
-  pattern: RegExp;
-  href: DynamicRouteHref;
-}> = [
-${dynamicPatterns}
-];
+/** Route info from pathname matching (with extracted param values) */
+export type PathnameRouteInfo<T extends RouteHref> = T extends DynamicRouteHref
+  ? {
+      href: T;
+      isStatic: false;
+      params: RouteParamsMap[T];
+    }
+  : {
+      href: T;
+      isStatic: true;
+      params: Record<string, string>;
+    };
+
+/** Route info from pathname matching with config */
+export type FullPathnameRouteInfo<T extends RouteHref> = PathnameRouteInfo<T> & {
+  config: RouteConfig | undefined;
+};
 
 /**
  * Type-safe path builder
  *
  * @example
  * // Static route
- * path("/service/karavan")
- * // => "/service/karavan"
+ * path("/about")
+ * // => "/about"
  *
- * // Dynamic route - params type is automatically inferred
- * path("/service/karavan/cluster/[cluster-name]/topic/[topic-name]", {
- *   "cluster-name": "prod",
- *   "topic-name": "events",
- * })
- * // => "/service/karavan/cluster/prod/topic/events"
+ * // Dynamic route
+ * path("/user/[id]", { id: "123" })
+ * // => "/user/123"
  */
 export function path<T extends StaticRouteHref>(route: T): string;
 export function path<T extends DynamicRouteHref>(
@@ -157,8 +378,8 @@ export function path(route: RouteHref, params?: Record<string, string>): string 
  * Find matching dynamic route pattern from actual URL path
  *
  * @example
- * matchDynamicRoute("/service/karavan/cluster/prod/topic/events")
- * // => "/service/karavan/cluster/[cluster-name]/topic/[topic-name]"
+ * matchDynamicRoute("/user/123")
+ * // => "/user/[id]"
  */
 export function matchDynamicRoute(pathname: string): DynamicRouteHref | null {
   for (const { pattern, href } of DYNAMIC_ROUTE_PATTERNS) {
@@ -173,11 +394,8 @@ export function matchDynamicRoute(pathname: string): DynamicRouteHref | null {
  * Extract dynamic parameters from actual URL path
  *
  * @example
- * extractParams(
- *   "/service/karavan/cluster/prod/topic/events",
- *   "/service/karavan/cluster/[cluster-name]/topic/[topic-name]"
- * )
- * // => { "cluster-name": "prod", "topic-name": "events" }
+ * extractParams("/user/123", "/user/[id]")
+ * // => { id: "123" }
  */
 export function extractParams(
   pathname: string,
@@ -189,7 +407,6 @@ export function extractParams(
   const match = pathname.match(patternEntry.pattern);
   if (!match) return null;
 
-  // Extract param keys from pattern
   const paramKeys = pattern.match(/\\[([^\\]]+)\\]/g);
   if (!paramKeys) return {};
 
@@ -200,17 +417,6 @@ export function extractParams(
   });
 
   return result;
-}
-
-/** Route info with config included */
-export type FullRouteInfo<T extends RouteHref> = RouteInfo<T> & {
-  config: RouteConfig | undefined;
-};
-
-/** Route options */
-export interface RouteOptions {
-  /** Load config dynamically (default: true) */
-  dynamic?: boolean;
 }
 
 /**
@@ -268,24 +474,6 @@ export function getRoute<T extends RouteHref>(href: T, options: RouteOptions = {
     config,
   } as FullRouteInfo<T>));
 }
-
-/** Route info from pathname matching (with extracted param values) */
-export type PathnameRouteInfo<T extends RouteHref> = T extends DynamicRouteHref
-  ? {
-      href: T;
-      isStatic: false;
-      params: RouteParamsMap[T];
-    }
-  : {
-      href: T;
-      isStatic: true;
-      params: Record<string, never>;
-    };
-
-/** Route info from pathname matching with config */
-export type FullPathnameRouteInfo<T extends RouteHref> = PathnameRouteInfo<T> & {
-  config: RouteConfig | undefined;
-};
 
 /**
  * Get route by actual pathname
@@ -360,10 +548,11 @@ export function getRouteByPathname(
 }
 
 /**
- * Template for index.ts
+ * Template for index.ts (init)
  */
-export function indexTemplate(): string {
+export function indexInitTemplate(): string {
   return `${getHeaderComment()}
+// Types
 export type {
   RouteHref,
   StaticRouteHref,
@@ -372,12 +561,34 @@ export type {
 } from "./types";
 
 export type {
+  ScannedRoute,
+  RouteCodegenConfig,
+  RouteMeta,
+  StringifyValues,
+  SearchParamsValidator,
+  ParamsValidator,
+  StaticRouteValidator,
+  DynamicRouteValidator,
+  ServerComponent,
+  ClientComponent,
+  StaticRouteOptionsWithValidator,
+  StaticRouteOptions,
+  DynamicRouteOptionsWithValidator,
+  DynamicRouteOptions,
+} from "./route-meta";
+
+export type { RouteConfig, RouteComponent } from "./create-route";
+
+export type {
   RouteInfo,
   FullRouteInfo,
   PathnameRouteInfo,
   FullPathnameRouteInfo,
   RouteOptions,
 } from "./utils";
+
+// Functions
+export { createRoute, createDynamicRoute } from "./create-route";
 
 export {
   path,
@@ -391,5 +602,164 @@ export {
   ROUTE_CONFIGS,
   DYNAMIC_ROUTE_PATTERNS,
 } from "./utils";
+`;
+}
+
+/**
+ * Template for types.ts (init) - empty placeholder
+ */
+export function typesInitTemplate(): string {
+  return `${getHeaderComment()}
+/** Static routes (no params required) */
+export type StaticRouteHref = string;
+
+/** Dynamic routes (params required) */
+export type DynamicRouteHref = string;
+
+/** All route hrefs */
+export type RouteHref = StaticRouteHref | DynamicRouteHref;
+
+/** Params type map for dynamic routes */
+export interface RouteParamsMap {
+  [key: string]: Record<string, string>;
+}
+`;
+}
+
+/**
+ * Template for routes.ts (init) - empty placeholder
+ */
+export function routesInitTemplate(): string {
+  return `${getHeaderComment()}
+import type { RouteConfig } from "./create-route";
+import type { RouteHref, DynamicRouteHref, RouteParamsMap } from "./types";
+
+/** All available routes */
+export const ROUTES = [] as const satisfies readonly RouteHref[];
+
+/** Route info type */
+type RouteInfoType<T extends RouteHref> = {
+  href: T;
+  isStatic: boolean;
+  params: string[];
+};
+
+/** Static route info map */
+export const ROUTE_INFO = {} as { [K in RouteHref]: RouteInfoType<K> };
+
+/** Dynamic import getters for route configs */
+export const ROUTE_CONFIGS = {} as { [K in RouteHref]: () => Promise<RouteConfig | undefined> };
+
+/** Dynamic route patterns for runtime matching */
+export const DYNAMIC_ROUTE_PATTERNS: Array<{
+  pattern: RegExp;
+  href: DynamicRouteHref;
+}> = [];
+`;
+}
+
+// ============================================
+// Generate Templates (Dynamic files - regenerated on route changes)
+// ============================================
+
+/**
+ * Template for types.ts (generate)
+ */
+export function typesTemplate(params: {
+  staticHrefUnion: string;
+  dynamicHrefUnion: string;
+  paramsMap: string;
+}): string {
+  const { staticHrefUnion, dynamicHrefUnion, paramsMap } = params;
+
+  return `${getHeaderComment()}
+/** Static routes (no params required) */
+export type StaticRouteHref =
+${staticHrefUnion || "  | never"};
+
+/** Dynamic routes (params required) */
+export type DynamicRouteHref =
+${dynamicHrefUnion || "  | never"};
+
+/** All route hrefs */
+export type RouteHref = StaticRouteHref | DynamicRouteHref;
+
+/** Params type map for dynamic routes */
+export interface RouteParamsMap {
+${paramsMap || "  // No dynamic routes"}
+}
+`;
+}
+
+interface RouteInput {
+  routePath: string;
+  importPath: string;
+  params: string[];
+  isStatic: boolean;
+}
+
+/**
+ * Template for routes.ts (generate) - dynamic route data
+ */
+export function routesTemplate(params: {
+  dynamicPatterns: string;
+  staticRoutes: RouteInput[];
+  dynamicRoutes: RouteInput[];
+}): string {
+  const { dynamicPatterns, staticRoutes, dynamicRoutes } = params;
+
+  const allRoutes = [...staticRoutes, ...dynamicRoutes];
+  const routesArrayLiteral = allRoutes.length > 0
+    ? allRoutes.map((r) => `  "${r.routePath}" as const`).join(",\n")
+    : "";
+
+  const routeConfigsLiteral = allRoutes
+    .map((r) => `  "${r.routePath}": () => import("${r.importPath}").then(m => m.default?._routeConfig)`)
+    .join(",\n");
+
+  const routeInfoLiteral = allRoutes
+    .map((r) => {
+      const paramsStr = JSON.stringify(r.params);
+      return `  "${r.routePath}": {
+    href: "${r.routePath}" as const,
+    isStatic: ${r.isStatic},
+    params: ${paramsStr} as ${r.isStatic ? "[]" : `(keyof RouteParamsMap["${r.routePath}"])[]`},
+  }`;
+    })
+    .join(",\n");
+
+  return `${getHeaderComment()}
+import type { RouteConfig } from "./create-route";
+import type { RouteHref, DynamicRouteHref, RouteParamsMap } from "./types";
+
+/** All available routes */
+export const ROUTES = [
+${routesArrayLiteral}
+] as const satisfies readonly RouteHref[];
+
+/** Route info type */
+type RouteInfoType<T extends RouteHref> = {
+  href: T;
+  isStatic: boolean;
+  params: string[];
+};
+
+/** Static route info map */
+export const ROUTE_INFO: { [K in RouteHref]: RouteInfoType<K> } = {
+${routeInfoLiteral}
+};
+
+/** Dynamic import getters for route configs */
+export const ROUTE_CONFIGS: { [K in RouteHref]: () => Promise<RouteConfig | undefined> } = {
+${routeConfigsLiteral}
+};
+
+/** Dynamic route patterns for runtime matching */
+export const DYNAMIC_ROUTE_PATTERNS: Array<{
+  pattern: RegExp;
+  href: DynamicRouteHref;
+}> = [
+${dynamicPatterns}
+];
 `;
 }

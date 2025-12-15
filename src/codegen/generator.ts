@@ -2,10 +2,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { RouteCodegenConfig, ScannedRoute } from "../types/config";
 import { scanRoutes, routePathToRegexString } from "./scanner";
-import { typesTemplate, utilsTemplate, indexTemplate } from "./templates";
+import { typesTemplate, routesTemplate } from "./templates";
 
 /**
  * Execute code generation
+ * Generates types.ts and routes.ts based on scanned routes
+ * Note: Static files (route-meta.ts, create-route.ts, utils.ts, index.ts) should be created by `init` command
  */
 export async function generate(config: RouteCodegenConfig = {}): Promise<void> {
   const {
@@ -30,14 +32,12 @@ export async function generate(config: RouteCodegenConfig = {}): Promise<void> {
   // 4. Create output directory
   fs.mkdirSync(outputDir, { recursive: true });
 
-  // 5. Generate files
+  // 5. Generate files (types.ts and routes.ts only)
   const typesContent = generateTypesFile(staticRoutes, dynamicRoutes);
-  const utilsContent = generateUtilsFile(staticRoutes, dynamicRoutes, appDir);
-  const indexContent = indexTemplate();
+  const routesContent = generateRoutesFile(staticRoutes, dynamicRoutes, appDir);
 
   fs.writeFileSync(path.join(outputDir, "types.ts"), typesContent);
-  fs.writeFileSync(path.join(outputDir, "utils.ts"), utilsContent);
-  fs.writeFileSync(path.join(outputDir, "index.ts"), indexContent);
+  fs.writeFileSync(path.join(outputDir, "routes.ts"), routesContent);
 
   console.log(`✅ Generated route files in ${outputDir}`);
   console.log(`   - ${routes.length} routes found`);
@@ -67,9 +67,9 @@ function generateTypesFile(
 }
 
 /**
- * Generate utils.ts content
+ * Generate routes.ts content
  */
-function generateUtilsFile(
+function generateRoutesFile(
   staticRoutes: ScannedRoute[],
   dynamicRoutes: ScannedRoute[],
   appDir: string
@@ -93,7 +93,7 @@ function generateUtilsFile(
     return "@/" + withoutExt;
   };
 
-  return utilsTemplate({
+  return routesTemplate({
     dynamicPatterns,
     staticRoutes: staticRoutes.map((r) => ({
       routePath: r.routePath,

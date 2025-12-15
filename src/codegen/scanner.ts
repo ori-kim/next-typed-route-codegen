@@ -69,6 +69,7 @@ export function routePathToRegexString(routePath: string): string {
     "^" +
     routePath
       .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\//g, "\\/")
       .replace(/\\\[([^\]]+)\\\]/g, "([^/]+)") +
     "$"
   );

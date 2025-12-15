@@ -637,20 +637,14 @@ export interface RouteParamsMap {
 export function routesInitTemplate(): string {
   return `${getHeaderComment()}
 import type { RouteConfig } from "./create-route";
-import type { RouteHref, DynamicRouteHref, RouteParamsMap } from "./types";
+import type { RouteHref, DynamicRouteHref } from "./types";
+import type { RouteInfo } from "./utils";
 
 /** All available routes */
 export const ROUTES = [] as const satisfies readonly RouteHref[];
 
-/** Route info type */
-type RouteInfoType<T extends RouteHref> = {
-  href: T;
-  isStatic: boolean;
-  params: string[];
-};
-
 /** Static route info map */
-export const ROUTE_INFO = {} as { [K in RouteHref]: RouteInfoType<K> };
+export const ROUTE_INFO = {} as { [K in RouteHref]: RouteInfo<K> };
 
 /** Dynamic import getters for route configs */
 export const ROUTE_CONFIGS = {} as { [K in RouteHref]: () => Promise<RouteConfig | undefined> };
@@ -726,31 +720,31 @@ export function routesTemplate(params: {
     .map((r) => {
       const paramsStr = JSON.stringify(r.params);
       return `  "${r.routePath}": {
-    href: "${r.routePath}" as const,
+    href: "${r.routePath}",
     isStatic: ${r.isStatic},
-    params: ${paramsStr} as ${r.isStatic ? "[]" : `(keyof RouteParamsMap["${r.routePath}"])[]`},
-  }`;
+    params: ${paramsStr},
+  } as RouteInfo<"${r.routePath}">`;
     })
     .join(",\n");
 
+  // Only import DynamicRouteHref if there are dynamic routes
+  const hasDynamicRoutes = dynamicRoutes.length > 0;
+  const typesImport = hasDynamicRoutes
+    ? `import type { RouteHref, DynamicRouteHref } from "./types";`
+    : `import type { RouteHref } from "./types";`;
+
   return `${getHeaderComment()}
 import type { RouteConfig } from "./create-route";
-import type { RouteHref, DynamicRouteHref, RouteParamsMap } from "./types";
+${typesImport}
+import type { RouteInfo } from "./utils";
 
 /** All available routes */
 export const ROUTES = [
 ${routesArrayLiteral}
 ] as const satisfies readonly RouteHref[];
 
-/** Route info type */
-type RouteInfoType<T extends RouteHref> = {
-  href: T;
-  isStatic: boolean;
-  params: string[];
-};
-
 /** Static route info map */
-export const ROUTE_INFO: { [K in RouteHref]: RouteInfoType<K> } = {
+export const ROUTE_INFO: { [K in RouteHref]: RouteInfo<K> } = {
 ${routeInfoLiteral}
 };
 
@@ -760,11 +754,11 @@ ${routeConfigsLiteral}
 };
 
 /** Dynamic route patterns for runtime matching */
-export const DYNAMIC_ROUTE_PATTERNS: Array<{
+export const DYNAMIC_ROUTE_PATTERNS${hasDynamicRoutes ? `: Array<{
   pattern: RegExp;
   href: DynamicRouteHref;
-}> = [
+}>` : ""} = [
 ${dynamicPatterns}
-];
+]${hasDynamicRoutes ? "" : " as const"};
 `;
 }
